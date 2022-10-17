@@ -1,0 +1,1 @@
+# Spatio-temporal-point-process-analysis-of-Mexico-State-wildfires
