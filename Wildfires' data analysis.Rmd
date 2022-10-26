@@ -1,0 +1,228 @@
+---
+title: "Wildfires' data analysis"
+author: "Luis Ramón Munive Hernández"
+date: '2022-10-15'
+output: 
+  pdf_document:
+    keep_tex: true
+---
+
+# Loading data
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Loading spatiotemporal data
+data <- read.csv(file = "Data/data.csv", header = TRUE)
+
+library(rgdal)
+# Loading Mexico State boundary in ShapeFile format
+mexico.state <- readOGR(dsn = "Data/15_mexico/conjunto_de_datos", 
+                        layer = "15ent")
+# Visualizing CRS
+#mexico.state@proj4string 
+
+library(raster)
+# Visualizing CRS
+#crs(mexico.state)
+
+library(sp)
+# Reprojecting Mexico State boundary to UTM zone 14N projection
+mexico.state.utm <- spTransform(x = mexico.state,
+                                CRSobj = CRS(projargs = "+init=epsg:32614"))
+#mexico.state.utm <- spTransform(x = mexico.state,
+#                                CRSobj = CRS(projargs = "+proj=utm +zone=14 +datum=WGS84 +units=m"))
+
+# See more details in https://epsg.io/32614
+```
+
+# Spatial analysis
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(spatstat)
+# Mexico State boundary as window
+mexico.state.owin <- owin(poly = list(x = rev(mexico.state.utm@polygons[[1]]@Polygons[[1]]@coords[,1]),
+                                      y = rev(mexico.state.utm@polygons[[1]]@Polygons[[1]]@coords[,2])))
+# See https://blog.valdosta.edu/andersonlab/2018/04/29/spatiallinesdataframe-to-owin-in-spatstat/
+
+# Spatial rectangular window
+#w <- owin(xrange = range(data$X), yrange = range(data$Y))
+
+# Spatial point pattern
+spat.pp <- ppp(x = data$X, y = data$Y, window = mexico.state.owin)
+spat.pp
+```
+
+```{r Spatial point pattern, fig.width=5, fig.height=5, fig.align='center', fig.cap="Spatial point pattern of Mexico State wildfires.", echo=FALSE, message=FALSE}
+plot(x = spat.pp, cex = 0.25, pch = 19, cols = "black", axes = FALSE, main = "")
+axis(side = 1, at = c(330090.3 + 0:7 * 30305.97), 
+     labels = c("330090.3", "360396.3", "390702.2", "421008.2", "451314.2", "481620.2", "511926.1", "542232.1"),
+     cex.axis = 0.5)
+axis(side = 2, las = 2, at = c(2031277 + 0:7 * 30300.34), 
+     labels = c("2031277", "2061577", "2091878", "2122178", "2152478", "2182779", "2213079", "2243379"), 
+     cex.axis = 0.5)
+title(main = "Spatial point pattern of Mexico State wildfires", cex.main = 1,
+      sub = "Projection: UTM zone 14N, ellipsoid: WGS84, units: meters, EPSG: 32614", cex.sub = 0.7,
+      xlab = list("X coordinate", cex = 0.9), 
+      ylab = list("Y coordinate", cex = 0.9))
+box()
+```
+
+```{r F function, fig.width=4.7, fig.height=5, fig.align='center', fig.cap="Estimated empty-space function F.", echo=FALSE, message=FALSE}
+par(mar = c(6, 4.1, 4.1, 2.1))
+plot(envelope(Y = spat.pp, fun = Fest, nsim = 100), 
+     main = "", xlab = "", ylab = "", las = 1, ylim = c(0, 1),
+     shadecol = "antiquewhite2", cex.axis = 0.7, lwd = 1.61,
+     legendargs = list(x = "bottom", inset = c(0, -0.43), 
+                       bty = "n", cex = 0.7, 
+                       horiz = TRUE, xpd = TRUE))
+title(main = "Empty-space function", cex.main = 1,
+      xlab = list("r (meters)", cex = 0.9), 
+      ylab = list("F(r)", cex = 0.9))
+```
+
+```{r G function, fig.width=4.7, fig.height=5, fig.align='center', fig.cap="Estimated nearest-neighbour function G.", echo=FALSE, message=FALSE, eval=FALSE}
+par(mar = c(6, 4.1, 4.1, 2.1))
+plot(envelope(Y = spat.pp, fun = Gest, nsim = 100), 
+     main = "", xlab = "", ylab = "", las = 1, ylim = c(0, 1),
+     shadecol = "antiquewhite2", cex.axis = 0.7, lwd = 1.61,
+     legendargs = list(x = "bottom", inset = c(0, -0.43), 
+                       bty = "n", cex = 0.7, 
+                       horiz = TRUE, xpd = TRUE))
+title(main = "Nearest-neighbour function", cex.main = 1,
+      xlab = list("r (meters)", cex = 0.9), 
+      ylab = list("G(r)", cex = 0.9))
+```
+
+```{r Intensity, fig.width=5.3, fig.height=5, fig.align='center', fig.cap="Estimated intensity.", echo=FALSE, message=FALSE}
+spat.pp.int <- density(x = spat.pp, sigma = 17000)
+plot(x = spat.pp.int, main = "", las = 1,
+     col = colorRampPalette(c('#2F2C62', '#42399B', '#4A52A7', '#59AFEA', '#7BCEB8', '#A7DA64', '#EFF121', '#F5952D', '#E93131', '#D70131', '#D70131'))(100))
+contour(x = spat.pp.int, add = TRUE, drawlabels = FALSE, nlevels = 13)
+axis(side = 1, at = c(330090.3 + 0:7 * 30305.97), 
+     labels = c("330090.3", "360396.3", "390702.2", "421008.2", "451314.2", "481620.2", "511926.1", "542232.1"),
+     cex.axis = 0.5)
+axis(side = 2, las = 2, at = c(2031277 + 0:7 * 30300.34), 
+     labels = c("2031277", "2061577", "2091878", "2122178", "2152478", "2182779", "2213079", "2243379"), 
+     cex.axis = 0.5)
+title(main = "Intensity", cex.main = 1,
+      xlab = list("X coordinate", cex = 0.9), 
+      ylab = list("Y coordinate", cex = 0.9))
+```
+
+# Temporal analysis
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+days.diff <- setdiff(x = c(1:max(data$Día)), y = unique(data$Día))
+
+days.diff <- data.frame(Día = days.diff,
+                        n = rep(x = 0, length(days.diff)))
+
+library(dplyr)
+days.count <- data %>% count(Día)
+
+days.count <- rbind(days.diff, days.count)
+days.count <- arrange(days.count, Día)
+
+days.count$Fecha <- seq(as.Date(x = "2010-01-01"), by = 1, len = nrow(days.count))
+
+ts <- ts(data = days.count$n, start = c(2010, 1, 1), frequency = 365.25)
+```
+
+```{r Time series, fig.width=5, fig.height=3, fig.align='center', fig.cap="Time series of Mexico State wildfires.", echo=FALSE, message=FALSE}
+plot(ts, main = "", type = "l", lwd = 0.5, xaxt = "n", yaxt = "n", xlab = "", ylab = "")
+axis(side = 1, at = c(2010:2018), cex.axis = 0.7,
+     labels = c("2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018"))
+axis(side = 2, cex.axis = 0.7, las = 1)
+title(main = "Time series of Mexico State wildfires", cex.main = 1,
+      xlab = list("Time", cex = 0.9), 
+      ylab = list("Daily number of wildfires", cex = 0.9))
+```
+
+```{r}
+library(tseries)
+adf.test(ts)
+```
+
+# Spatio-temporal analysis
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, eval=FALSE}
+set.seed(seed = 16102022)
+data <- data[sample(x = c(1:nrow(data)), size = 1000, replace = FALSE),]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, eval=FALSE}
+library(stpp)
+# Spatio-temporal point pattern
+st.pp <- as.3dpoints(data$X / 1000, data$Y / 1000, data$Día)
+# Mexico State shape rescaled
+mexico.state.rescaled <- cbind(mexico.state.owin$bdry[[1]]$x / 1000,
+                               mexico.state.owin$bdry[[1]]$y / 1000)
+colnames(mexico.state.rescaled) <- c("x", "y")
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, eval=FALSE}
+# Estimation of temporal intensity
+M.t <- density(x = st.pp[,3], n = 1000)
+mu.t <- M.t$y[findInterval(x = st.pp[,3], vec = M.t$x)] * dim(st.pp)[1]
+
+# Estimation of spatial intensity
+h <- mse2d(pts = as.points(st.pp[,1:2]), 
+           poly = mexico.state.rescaled,
+           nsmse = 50,
+           range = 4)
+h <- h$h[which.min(x = h$mse)]
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, eval=FALSE}
+Sys.time()
+M.s <- kernel2d(pts = as.points(st.pp[,1:2]),
+                poly = mexico.state.rescaled,
+                h0 = h, nx = 100, ny = 100)
+Sys.time()
+
+at.x <- findInterval(x = st.pp[,1], vec = M.s$x)
+at.y <- findInterval(x = st.pp[,2], vec = M.s$y)
+
+m.hat <- NULL
+for(i in 1:length(at.x)){
+  m.hat <- c(m.hat, M.s$z[at.x[i]], at.y[i])
+}
+
+u <- seq(0, 30, by = 1)
+v <- seq(0, 3000, by = 30)
+
+stik <- STIKhat(xyt = st.pp,
+                s.region = mexico.state.rescaled,
+                t.region = c(1, 3000),
+                lambda = na.omit(m.hat) * mu.t / dim(st.pp)[1],
+                dist = u, times = v,
+                infectious = TRUE)
+
+g <- PCFhat(xyt = st.pp, 
+            s.region = mexico.state.rescaled,
+            t.region = c(1, 3000),
+            dist = u, times = v)
+```
+
+```{r STIKL persp, fig.width=5, fig.height=5, fig.align='center', echo=FALSE, message=FALSE, eval=FALSE}
+plotK(K = stik, n = 100,
+      L = TRUE, type = "persp",
+      legend = TRUE,
+      theta = -35, phi = 30)
+```
+
+```{r STIKL image, fig.width=5, fig.height=5, fig.align='center', echo=FALSE, message=FALSE, eval=FALSE}
+plotK(K = stik, n = 100,
+      L = TRUE, type = "image",
+      legend = TRUE)
+```
+
+```{r gPCF persp, fig.width=5, fig.height=5, fig.align='center', eval=FALSE}
+plotPCF(PCF = g, n = 100, type = "persp",
+        theta = 30, phi = 35, legend = TRUE)
+```
+
+```{r gPCF image, fig.width=5, fig.height=5, fig.align='center', eval=FALSE}
+plotPCF(PCF = g, n = 100,
+        L = TRUE, type = "image",
+        legend = TRUE)
+```
